@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dự đoán chi phí bảo hiểm y tế với AI</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..700&family=Quicksand:wght@300..800&family=Space+Mono:wght@400;700&display=swap');
+        .font-sans { font-family: 'Quicksand', sans-serif; font-weight: 300}
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-receipt { font-family: 'Space Mono', monospace; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+
+        * { letter-spacing: normal !important; word-break: keep-all; }
+       
+        .sticky-header { position: sticky; top: 0; z-index: 100; background: #fcfaf2; backdrop-filter: blur(12px); }
+        .starburst-shape { clip-path: polygon(50% 0%, 65% 5%, 80% 0%, 85% 15%, 100% 20%, 95% 35%, 100% 50%, 95% 65%, 100% 80%, 85% 85%, 80% 100%, 65% 95%, 50% 100%, 35% 95%, 20% 100%, 15% 85%, 0% 80%, 5% 65%, 0% 50%, 5% 35%, 0% 20%, 15% 15%, 20% 0%, 35% 5%); }
+        .glass-slider { -webkit-appearance: none; appearance: none; height: 12px; background: rgba(0,0,0,0.08); border-radius: 12px; outline: none; border: 1px solid rgba(0,0,0,0.05); width: 100%; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); }
+        .glass-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; background: #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border: 2px solid #333; transition: transform 0.2s, box-shadow 0.2s; }
+        .glass-slider::-webkit-slider-thumb:active { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.3); border-color: #000; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .cost-value { white-space: nowrap; font-size: 1.5rem; }
+        .typing::after { content: '●'; animation: typing 1s infinite; }
+        @keyframes typing { 0%, 100% { content: '●'; } 33% { content: '●●'; } 66% { content: '●●●'; } }
+       
+        /* --- Khung chính (giữ rộng 420px, viền điện thoại) --- */
+        .app-container {
+            width: 100%;
+            max-width: 400px;
+            height: 740px;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+            border-radius: 2rem;
+            border: 8px solid rgb(255, 249, 249);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            background: #fcfaf2;
+        }
+        @media (max-width: 640px) {
+            .app-container {
+                height: 95vh;
+                border-radius: 0;
+                border: none;
+                box-shadow: none;
+            }
+        }
+        body { overflow-x: hidden; background: #e8e6e1; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .editable-number { cursor: pointer; transition: background 0.2s; border-radius: 12px; padding: 0 4px; }
+        .editable-number:hover { background: rgba(0,0,0,0.05); }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+        .state-input { width: 100%; padding: 0.75rem 1rem; border-radius: 1rem; background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.1); font-weight: 500; outline: none; backdrop-filter: blur(4px); }
+        .state-input:focus { border-color: #a3b879; background: white; }
+       
+        /* Receipt to hơn, dài hơn */
+        .receipt-tear-top {
+            width: 100%;
+            height: 20px;
+            background: repeating-linear-gradient(45deg, #e5e5e5, #e5e5e5 12px, #fcfaf2 12px, #fcfaf2 24px);
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+        }
+        .receipt-tear-bottom {
+            width: 100%;
+            height: 20px;
+            background: repeating-linear-gradient(135deg, #e5e5e5, #e5e5e5 12px, #fcfaf2 12px, #fcfaf2 24px);
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
+        }
+        .receipt-body {
+            background: #fcfaf2;
+            padding: 1.8rem 1.5rem;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            font-size: 0.9rem;
+        }
+        .receipt-body .text-xs {
+            font-size: 0.75rem;
+        }
+        .receipt-body .text-sm {
+            font-size: 0.85rem;
+        }
+        .receipt-body .text-lg {
+            font-size: 1.2rem;
+        }
+        .receipt-body .text-2xl {
+            font-size: 1.8rem;
+        }
+        .modal-overlay .max-w-\[380px\] {
+            max-width: 380px;
+        }
+    </style>
+</head>
+<body>
+
+
+    <div class="app-container flex flex-col">
+       
+        <!-- MÀN HÌNH ĐĂNG NHẬP (giữ nguyên) -->
+        <div id="loginScreen" class="flex-1 flex flex-col relative overflow-hidden">
+            <div class="absolute top-[-20px] right-[-30px] w-64 h-64 bg-[#f3b4d1]/50 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute top-[20%] left-[-40px] w-48 h-48 bg-[#fce66d]/40 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="absolute bottom-[10%] right-[-20px] w-56 h-56 bg-[#b4cbf0]/50 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute top-16 right-12 w-12 h-12 bg-[#a3b879]/30 starburst-shape transform rotate-12 blur-[2px] pointer-events-none"></div>
+
+
+            <div class="p-8 pt-16 z-10 relative flex-1 flex flex-col">
+                <div class="mt-8 mb-10">
+                    <div class="w-16 h-16 bg-white/70 backdrop-blur-md rounded-[1.2rem] shadow-sm border border-white flex items-center justify-center mb-6 transform -rotate-3 transition-transform hover:rotate-0">
+                        <i data-lucide="wand-2" class="text-blue-500 w-7 h-7"></i>
+                    </div>
+                    <h1 class="text-[3.2rem] leading-[1.05] font-black tracking-tight text-gray-900 drop-shadow-sm">
+                        Xin chào, <br/>
+                        <span class="font-serif italic font-normal text-[3.8rem] leading-[1.1] text-gray-800">người mới!</span>
+                    </h1>
+                    <p class="font-bold text-gray-500 mt-4 text-[15px] leading-relaxed">
+                        Để AI có thể xưng hô và cá nhân hóa chính xác rủi ro y tế, hãy cho chúng tôi biết tên bạn.
+                    </p>
+                </div>
+
+
+                <div class="flex flex-col gap-4 mt-auto mb-8 relative">
+                    <input type="text" id="userNameInput" placeholder="Nhập tên của bạn..." class="w-full bg-white/60 backdrop-blur-xl px-7 py-5 rounded-[1.5rem] font-bold outline-none border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] focus:bg-white focus:shadow-[0_8px_32px_rgba(0,0,0,0.1)] transition-all placeholder:text-gray-400 text-[18px] text-gray-800" />
+                </div>
+
+
+                <div class="flex flex-col gap-3 pb-4">
+                    <button id="startBtn" class="w-full bg-gray-900/90 backdrop-blur-md text-white py-4 rounded-[1.5rem] font-black text-lg active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-lg hover:bg-black border border-white/10">
+                        Bắt đầu ngay <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                    <button id="anonymousBtn" class="w-full bg-transparent text-gray-500 py-4 font-bold text-[15px] active:scale-95 transition-transform hover:text-gray-800 flex items-center justify-center">
+                        Dùng thử ẩn danh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- MÀN HÌNH CHÍNH (CALCULATOR) -->
+        <div id="calculatorScreen" class="flex-1 flex flex-col hidden overflow-hidden relative">
+            <div class="flex-1 overflow-y-auto hide-scrollbar pb-36 relative scroll-smooth bg-[#fcfaf2]">
+               
+                <!-- Background Blobs -->
+                <div class="absolute top-0 left-0 w-full h-80 bg-gradient-to-b from-[#fce66d]/20 to-transparent pointer-events-none"></div>
+                <div class="absolute top-[35%] right-[-50px] w-64 h-64 bg-[#f3b4d1]/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute bottom-[20%] left-[-50px] w-64 h-64 bg-[#b4cbf0]/20 rounded-full blur-3xl pointer-events-none"></div>
+
+
+                <!-- Header -->
+                <div class="sticky-header">
+                    <div class="flex justify-between items-center p-6 pt-8 z-20 bg-[#fcfaf2]/80 backdrop-blur-xl border-b border-white/30">
+                        <button id="backBtn" class="w-11 h-11 bg-white/60 backdrop-blur-md rounded-full flex items-center justify-center border border-white shadow-sm active:scale-95 transition-all text-gray-700">
+                            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                        </button>
+                        <div class="flex items-center gap-1.5 bg-white/60 backdrop-blur-md text-gray-800 px-4 py-2 rounded-full border border-white shadow-sm">
+                            <i data-lucide="sparkles" class="text-yellow-500 w-4 h-4"></i>
+                            <span class="font-bold text-xs tracking-wider uppercase">Smart Health AI Model</span>
+                        </div>
+                        <div class="w-11"></div>
+                    </div>
+                </div>
+
+
+                <!-- Chữ dự đoán -->
+                <div class="px-6 mt-4 z-20 relative mb-6">
+                    <h1 class="text-[2.6rem] leading-[1.05] font-black tracking-tight text-gray-900">
+                        Dự đoán <br/>
+                        <span class="font-serif italic font-normal text-[3.2rem] leading-[1.1] text-gray-800" id="personalizedGreeting">
+                            chi phí y tế
+                        </span>
+                    </h1>
+                </div>
+
+
+                <!-- FORM INPUTS -->
+                <div class="px-6 flex flex-col gap-4 relative z-20">
+                   
+                    <!-- Sliders với editable numbers -->
+                    <div class="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-[#fce66d]/40 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10"></div>
+                       
+                        <div class="mb-6 relative z-10">
+                            <div class="flex justify-between items-end mb-3">
+                                <label class="text-[15px] font-black text-gray-800 flex items-center gap-2">Tuổi tác</label>
+                                <span class="text-2xl font-black text-black editable-number" id="ageVal">28</span>
+                            </div>
+                            <input type="range" min="18" id="ageSlider" max="80" value="28" class="glass-slider w-full" />
+                        </div>
+
+
+                        <div class="mb-6 relative z-10">
+                            <div class="flex justify-between items-end mb-3">
+                                <label class="text-[15px] font-black text-gray-800 flex items-center gap-2">Chiều cao (cm)</label>
+                                <span class="text-2xl font-black text-black editable-number" id="heightVal">170</span>
+                            </div>
+                            <input type="range" min="140" id="heightSlider" max="220" value="170" class="glass-slider w-full" />
+                        </div>
+
+
+                        <div class="mb-4 relative z-10">
+                            <div class="flex justify-between items-end mb-3">
+                                <label class="text-[15px] font-black text-gray-800 flex items-center gap-2">Cân nặng (kg)</label>
+                                <span class="text-2xl font-black text-black editable-number" id="weightVal">65</span>
+                            </div>
+                            <input type="range" min="40" id="weightSlider" max="150" value="65" class="glass-slider w-full" />
+                        </div>
+
+
+                        <div class="mt-5 p-3 bg-white/70 rounded-2xl border border-white shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)] flex justify-between items-center">
+                            <span class="text-[13px] font-black text-gray-600 uppercase tracking-wide">Chỉ số BMI:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl font-black text-black" id="bmiVal">22.5</span>
+                                <span id="bmiChip" class="text-[10px] px-2 py-1 rounded-lg font-black uppercase tracking-wider shadow-sm bg-green-100 text-green-800 border border-green-200">
+                                    Lý tưởng
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Gender & Smoker -->
+                    <div class="grid grid-cols-2 gap-4 relative z-10">
+                        <button id="genderToggle" class="rounded-[2rem] rounded-tr-[3.5rem] rounded-bl-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-[#b4cbf0]/90">
+                            <div class="w-14 h-14 bg-white/60 backdrop-blur-sm rounded-full flex items-center justify-center mb-2 shadow-sm group-hover:scale-110 transition-transform">
+                                <i id="genderIcon" data-lucide="user" class="text-blue-900 w-7 h-7"></i>
+                            </div>
+                            <span class="font-black text-sm text-gray-800 mb-0.5">Giới tính</span>
+                            <span id="genderLabel" class="font-serif italic text-3xl font-black text-black leading-none mt-1">Nam</span>
+                        </button>
+
+
+                        <button id="smokerToggle" class="rounded-[2rem] rounded-tl-[3.5rem] rounded-br-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-white/80">
+                            <div class="w-14 h-14 bg-gray-100 backdrop-blur-sm rounded-full flex items-center justify-center mb-2 shadow-sm group-hover:scale-110 transition-transform" id="smokerIconContainer">
+                                <i data-lucide="flame" id="smokerIcon" class="text-gray-500 w-7 h-7"></i>
+                            </div>
+                            <span class="font-black text-sm text-gray-800 mb-0.5">Hút thuốc</span>
+                            <span id="smokerLabel" class="font-serif italic text-3xl font-black text-black leading-none mt-1">Không</span>
+                        </button>
+                    </div>
+
+
+                    <!-- Người phụ thuộc -->
+                    <div class="bg-white/80 backdrop-blur-xl rounded-[2rem] p-3 pl-6 flex items-center justify-between border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] relative z-10">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="users" class="text-gray-700 w-5 h-5"></i>
+                            <span class="font-black text-[15px] text-gray-900">Số lượng con cái</span>
+                        </div>
+                        <div class="flex items-center bg-white/70 rounded-[1.2rem] p-1.5 border border-gray-200 shadow-sm">
+                            <button id="depMinus" class="w-10 h-10 rounded-xl bg-white text-gray-800 flex items-center justify-center font-black text-xl border border-gray-200 shadow-sm active:scale-90 transition-all">-</button>
+                            <span id="depVal" class="w-12 text-center font-black text-xl text-black">0</span>
+                            <button id="depPlus" class="w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-xl shadow-sm active:scale-90 transition-all">+</button>
+                        </div>
+                    </div>
+
+
+                    <!-- Chọn bang (autocomplete) -->
+                    <div class="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] relative z-10">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i data-lucide="map-pin" class="text-gray-700 w-5 h-5"></i>
+                            <span class="font-black text-[15px] text-gray-900">Bang sinh sống</span>
+                        </div>
+                        <input type="text" id="stateInput" list="stateList" placeholder="Nhập tên bang hoặc mã bang..."
+                               class="state-input" autocomplete="off">
+                        <datalist id="stateList"></datalist>
+                    </div>
+                </div>
+
+
+                <!-- PREDICT CARD -->
+                <div class="bg-[#a3b879] backdrop-blur-xl rounded-[2.5rem] p-6 mx-6 mt-8 mb-4 relative z-30 border border-white/40 shadow-[0_12px_40px_rgba(163,184,121,0.4)] overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-black/10 backdrop-blur-md text-green-950 px-4 py-2 rounded-bl-[1.5rem] flex items-center gap-2 border-b border-l border-white/30">
+                        <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-white">Độ tự tin: <span id="confidenceVal">--</span>%</span>
+                    </div>
+
+
+                    <div class="flex justify-between items-center mt-4 mb-5 px-1">
+                        <h2 class="text-2xl font-black text-black font-serif italic">Chi Phí Dự Đoán</h2>
+                    </div>
+
+
+                    <div class="bg-white/90 backdrop-blur-md rounded-[1.5rem] px-5 py-5 flex justify-between items-center mb-5 text-gray-900 border border-white/50 shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="brain-circuit" class="text-gray-800 w-5.5 h-5.5"></i>
+                            <span class="font-black text-[15px]">Chi phí / năm</span>
+                        </div>
+                        <span class="font-black cost-value bg-white px-4 py-1.5 rounded-xl shadow-sm border border-gray-200" id="costVal">$--</span>
+                    </div>
+
+
+                    <div class="flex gap-3 relative">
+                        <button id="predictBtn" class="flex-1 bg-gray-900/90 backdrop-blur-md text-white rounded-[1.5rem] py-4 font-bold text-[15px] flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg hover:bg-black border border-white/10">
+                            <i data-lucide="receipt-text" class="text-[#fce66d] w-5 h-5"></i>
+                            <span id="predictBtnText">Xuất Báo Cáo</span>
+                        </button>
+                        <button id="aiAdvisorBtn" class="w-16 bg-[#fce66d]/90 backdrop-blur-md text-gray-900 rounded-[1.5rem] py-4 flex justify-center items-center active:scale-95 transition-all shadow-md hover:bg-[#fce66d] border border-white/30">
+                            <i data-lucide="bot" class="w-5.5 h-5.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- BOTTOM NAVIGATION BAR -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] h-[4.5rem] bg-gray-900/85 backdrop-blur-xl rounded-full flex justify-between items-center px-6 z-40 shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-white/10">
+                <button id="navHome" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-colors active:scale-90">
+                    <i data-lucide="home" class="w-5.5 h-5.5"></i>
+                </button>
+                <button id="navReset" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-colors active:scale-90">
+                    <i data-lucide="refresh-ccw" class="w-5.5 h-5.5"></i>
+                </button>
+                <button id="navAIAssistant" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-colors active:scale-90">
+                    <i data-lucide="bot" class="w-5.5 h-5.5"></i>
+                </button>
+                <button id="navProfile" class="w-12 h-12 flex items-center justify-center text-white/50 hover:text-white transition-colors active:scale-90">
+                    <i data-lucide="user" class="w-5.5 h-5.5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL RECEIPT - to hơn, dài hơn, thêm ... -->
+    <div id="receiptModal" class="modal-overlay hidden">
+        <div class="w-full max-w-[380px] relative shadow-2xl transition-all duration-500 transform translate-y-10 scale-95" id="receiptCard">
+            <!-- Phần rách phía trên -->
+            <div class="receipt-tear-top"></div>
+            <div class="receipt-body bg-[#fcfaf2] text-black font-receipt">
+                <div class="text-center mb-3">
+                    <h3 class="text-2xl font-bold tracking-tight">AI PREDICTION</h3>
+                    <p class="text-xs text-gray-600 mt-1">KHÁCH HÀNG: <span id="receiptUserName">GUEST USER</span></p>
+                    <p class="text-xs text-gray-600">ĐỘ TỰ TIN: <span id="receiptConfidence">--</span>%</p>
+                </div>
+                <div class="border-b-2 border-dashed border-gray-400 my-2"></div>
+                <div class="flex justify-between text-xs font-bold text-gray-600">
+                    <span id="receiptDate">NGÀY: --/--/----</span>
+                    <span id="receiptTime">GIỜ: --:--</span>
+                </div>
+                <div class="border-b-2 border-dashed border-gray-400 my-2"></div>
+                <div class="font-bold text-sm mb-2 text-center">DỮ LIỆU ĐẦU VÀO:</div>
+                <div class="flex flex-col gap-2 text-sm mt-1 text-gray-600">
+                    <div class="flex justify-between"><span>TUỔI      ...........................</span><span class="font-bold text-black" id="receiptAge">--</span></div>
+                    <div class="flex justify-between"><span>GIỚI TÍNH      ..........................</span><span class="font-bold text-black" id="receiptGender">--</span></div>
+                    <div class="flex justify-between"><span>BMI      .................</span><span class="font-bold text-black" id="receiptBMI">--</span></div>
+                    <div class="flex justify-between"><span>HÚT THUỐC      ........................</span><span class="font-bold text-black" id="receiptSmoker">--</span></div>
+                    <div class="flex justify-between"><span>SỐ LƯỢNG CON CÁI      ...........</span><span class="font-bold text-black" id="receiptDeps">--</span></div>
+                    <div class="flex justify-between"><span>KHU VỰC      .......................</span><span class="font-bold text-black" id="receiptRegion">--</span></div>
+                </div>
+                <div class="border-b-2 border-dashed border-gray-400 my-3"></div>
+                <div class="flex justify-between items-end mt-2">
+                    <span class="text-lg font-bold">CHI PHÍ DỰ KIẾN</span>
+                    <span class="text-2xl font-black text-green-700" id="receiptTotal">$--</span>
+                </div>
+                <!-- Dòng ba chấm trang trí -->
+                <div class="text-center text-gray-400 text-lg tracking-wider my-3">. . .</div>
+                <button id="closeReceiptBtn" class="mt-2 w-full border border-gray-300 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all bg-gray-100 text-gray-800">[ ĐÓNG HÓA ĐƠN ]</button>
+            </div>
+            <!-- Phần rách phía dưới -->
+            <div class="receipt-tear-bottom"></div>
+        </div>
+    </div>
+
+
+    <!-- MODAL AI ADVISOR (giữ nguyên) -->
+    <div id="aiAdvisorSheet" class="fixed inset-0 bg-black/40 z-[70] backdrop-blur-sm transition-opacity duration-300 flex items-end hidden">
+        <div class="w-full max-w-[420px] mx-auto bg-[#fcfaf2] rounded-t-[2.5rem] p-6 pb-12 border-t border-white shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col max-h-[85%] translate-y-full" id="aiAdvisorContainer">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-[#fce66d]/80 rounded-2xl flex items-center justify-center shadow-sm border border-white/50">
+                        <i data-lucide="bot" class="text-yellow-800 w-5.5 h-5.5"></i>
+                    </div>
+                    <h3 class="font-black text-2xl font-serif italic text-gray-900">AI Advisor</h3>
+                </div>
+                <button class="close-advisor-sheet bg-white/80 p-2 rounded-full border border-gray-200 shadow-sm active:scale-95 transition-all">
+                    <i data-lucide="x" class="text-gray-600 w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="aiChatMessages" class="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-3 mb-4 bg-gray-50 rounded-2xl p-4">
+                <div class="bg-purple-100 rounded-2xl p-3 max-w-[85%] self-start">
+                    <span class="text-sm">👋 Chào bạn! Tôi là AI Advisor. Hãy hỏi tôi bất cứ điều gì về sức khỏe, bảo hiểm, hoặc nhập thông tin của bạn để được tư vấn chi tiết!</span>
+                </div>
+            </div>
+            <div class="flex gap-2 mt-2">
+                <input type="text" id="aiChatInput" placeholder="Nhập câu hỏi của bạn..." class="flex-1 bg-white border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-purple-400 text-sm">
+                <button id="aiChatSendBtn" class="bg-purple-600 text-white px-5 rounded-2xl active:scale-95 transition-all">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL PROFILE (giữ nguyên) -->
+    <div id="profileSheet" class="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm transition-opacity duration-300 flex items-end hidden">
+        <div class="w-full max-w-[420px] mx-auto bg-[#fcfaf2] rounded-t-[2.5rem] p-8 pb-12 border-t border-white shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] translate-y-full" id="profileContainer">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-black text-2xl font-serif italic text-gray-900">Tài Khoản</h3>
+                <button class="close-profile-sheet bg-white/80 p-2 rounded-full border border-gray-200 shadow-sm">
+                    <i data-lucide="x" class="text-gray-600 w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex flex-col items-center gap-4 py-4">
+                <div class="w-20 h-20 bg-[#fce66d]/80 rounded-full flex items-center justify-center border border-white shadow-md mb-1">
+                    <i data-lucide="user" class="text-yellow-900 w-9 h-9"></i>
+                </div>
+                <div class="text-center">
+                    <h4 class="font-black text-2xl text-gray-900" id="profileName">Khách</h4>
+                    <p class="text-[13px] font-bold text-gray-500 mt-1 uppercase tracking-widest">AI Certified Health Analyst</p>
+                </div>
+                <button id="logoutBtn" class="w-full bg-red-50/80 text-red-600 py-4 rounded-2xl font-bold text-[15px] mt-6 shadow-sm border border-red-100 active:scale-95 transition-all">
+                    Đăng Xuất
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // GROQ API Configuration
+        const GROQ_API_KEY = "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";
+        const GROQ_MODEL = "llama-3.3-70b-versatile";
+       
+        // Mapping bang -> vùng
+        const stateToRegion = {
+            "CT":"northeast","DE":"northeast","ME":"northeast","MD":"northeast","MA":"northeast","NH":"northeast","NJ":"northeast","NY":"northeast","PA":"northeast","RI":"northeast","VT":"northeast",
+            "AL":"southeast","AR":"southeast","FL":"southeast","GA":"southeast","KY":"southeast","LA":"southeast","MS":"southeast","NC":"southeast","SC":"southeast","TN":"southeast","VA":"southeast","WV":"southeast",
+            "AZ":"southwest","CO":"southwest","NM":"southwest","NV":"southwest","OK":"southwest","TX":"southwest","UT":"southwest",
+            "AK":"northwest","CA":"northwest","ID":"northwest","MT":"northwest","OR":"northwest","WA":"northwest","WY":"northwest","HI":"northwest"
+        };
+       
+        const usStates = [
+            {code:"AL",name:"Alabama"},{code:"AK",name:"Alaska"},{code:"AZ",name:"Arizona"},{code:"AR",name:"Arkansas"},
+            {code:"CA",name:"California"},{code:"CO",name:"Colorado"},{code:"CT",name:"Connecticut"},{code:"DE",name:"Delaware"},
+            {code:"FL",name:"Florida"},{code:"GA",name:"Georgia"},{code:"HI",name:"Hawaii"},{code:"ID",name:"Idaho"},
+            {code:"IL",name:"Illinois"},{code:"IN",name:"Indiana"},{code:"IA",name:"Iowa"},{code:"KS",name:"Kansas"},
+            {code:"KY",name:"Kentucky"},{code:"LA",name:"Louisiana"},{code:"ME",name:"Maine"},{code:"MD",name:"Maryland"},
+            {code:"MA",name:"Massachusetts"},{code:"MI",name:"Michigan"},{code:"MN",name:"Minnesota"},{code:"MS",name:"Mississippi"},
+            {code:"MO",name:"Missouri"},{code:"MT",name:"Montana"},{code:"NE",name:"Nebraska"},{code:"NV",name:"Nevada"},
+            {code:"NH",name:"New Hampshire"},{code:"NJ",name:"New Jersey"},{code:"NM",name:"New Mexico"},{code:"NY",name:"New York"},
+            {code:"NC",name:"North Carolina"},{code:"ND",name:"North Dakota"},{code:"OH",name:"Ohio"},{code:"OK",name:"Oklahoma"},
+            {code:"OR",name:"Oregon"},{code:"PA",name:"Pennsylvania"},{code:"RI",name:"Rhode Island"},{code:"SC",name:"South Carolina"},
+            {code:"SD",name:"South Dakota"},{code:"TN",name:"Tennessee"},{code:"TX",name:"Texas"},{code:"UT",name:"Utah"},
+            {code:"VT",name:"Vermont"},{code:"VA",name:"Virginia"},{code:"WA",name:"Washington"},{code:"WV",name:"West Virginia"},
+            {code:"WI",name:"Wisconsin"},{code:"WY",name:"Wyoming"}
+        ];
+       
+        function getRegionDisplayName(regionCode) {
+            const map = {"northeast":"Đông Bắc","southeast":"Đông Nam","southwest":"Tây Nam","northwest":"Tây Bắc"};
+            return map[regionCode] || "Chưa xác định";
+        }
+       
+        // State Management
+        const state = {
+            userName: '',
+            isLoggedIn: false,
+            currentScreen: 'login',
+            formData: {
+                age: 28,
+                gender: 'male',
+                height: 170,
+                weight: 65,
+                children: 0,
+                smoker: 'no',
+                region: 'southeast'
+            },
+            predictedCost: 0,
+            confidence: 0,
+            bmiCategory: '',
+            animatedCost: 0,
+            isFetching: false,
+            fetchTimer: null
+        };
+
+
+        function calculateBMI() {
+            const heightInMeters = state.formData.height / 100;
+            return Number((state.formData.weight / (heightInMeters * heightInMeters)).toFixed(1));
+        }
+        function getBMICategory(bmi) {
+            if (bmi < 18.5) return 'Thiếu cân';
+            if (bmi < 25) return 'Lý tưởng';
+            if (bmi < 30) return 'Thừa cân';
+            return 'Béo phì';
+        }
+
+
+        // Animation số dần
+        let animationFrameId = null;
+        function animateCost(targetValue) {
+            const duration = 500;
+            const startValue = state.animatedCost;
+            const startTime = performance.now();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            function update(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = progress * (2 - progress);
+                const currentValue = startValue + (targetValue - startValue) * easeProgress;
+                state.animatedCost = currentValue;
+                document.getElementById('costVal').innerText = `$${Math.round(currentValue).toLocaleString()}`;
+                if (progress < 1) {
+                    animationFrameId = requestAnimationFrame(update);
+                } else {
+                    state.animatedCost = targetValue;
+                    document.getElementById('costVal').innerText = `$${Math.round(targetValue).toLocaleString()}`;
+                }
+            }
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+
+        // Gọi API dự đoán
+        async function fetchPrediction() {
+            if (state.isFetching) return;
+            state.isFetching = true;
+            const bmi = calculateBMI();
+            const payload = {
+                age: state.formData.age,
+                sex: state.formData.gender,
+                bmi: bmi,
+                children: state.formData.children,
+                smoker: state.formData.smoker,
+                region: state.formData.region
+            };
+            try {
+                const response = await axios.post('/predict', payload);
+                if (response.data.success) {
+                    state.predictedCost = response.data.total_cost;
+                    state.confidence = response.data.confidence;
+                    state.bmiCategory = response.data.bmi_category;
+                    animateCost(state.predictedCost);
+                    document.getElementById('confidenceVal').innerText = state.confidence;
+                    const bmiChip = document.getElementById('bmiChip');
+                    bmiChip.innerText = state.bmiCategory;
+                    bmiChip.className = "text-[10px] px-2 py-1 rounded-lg font-black uppercase tracking-wider shadow-sm ";
+                    if (state.bmiCategory === 'Lý tưởng') bmiChip.classList.add('bg-green-100', 'text-green-800', 'border', 'border-green-200');
+                    else if (state.bmiCategory === 'Thiếu cân') bmiChip.classList.add('bg-blue-100', 'text-blue-800', 'border', 'border-blue-200');
+                    else bmiChip.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-200');
+                } else {
+                    console.error('Prediction error:', response.data.error);
+                }
+            } catch (error) {
+                console.error('API call failed:', error);
+            }
+            state.isFetching = false;
+        }
+
+
+        function debouncedFetch() {
+            if (state.fetchTimer) clearTimeout(state.fetchTimer);
+            state.fetchTimer = setTimeout(() => { fetchPrediction(); }, 300);
+        }
+
+
+        function syncUI() {
+            document.getElementById('ageVal').innerText = state.formData.age;
+            document.getElementById('heightVal').innerText = state.formData.height;
+            document.getElementById('weightVal').innerText = state.formData.weight;
+            const bmi = calculateBMI();
+            document.getElementById('bmiVal').innerText = bmi;
+           
+            if (state.formData.gender === 'male') {
+                document.getElementById('genderToggle').className = "rounded-[2rem] rounded-tr-[3.5rem] rounded-bl-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-[#b4cbf0]/90";
+                document.getElementById('genderLabel').innerText = "Nam";
+                document.getElementById('genderIcon').setAttribute('data-lucide', 'user');
+            } else {
+                document.getElementById('genderToggle').className = "rounded-[2rem] rounded-tr-[3.5rem] rounded-bl-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-[#f3b4d1]/90";
+                document.getElementById('genderLabel').innerText = "Nữ";
+                document.getElementById('genderIcon').setAttribute('data-lucide', 'user');
+            }
+            if (state.formData.smoker === 'yes') {
+                document.getElementById('smokerToggle').className = "rounded-[2rem] rounded-tl-[3.5rem] rounded-br-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-[#ffcba4]/90";
+                document.getElementById('smokerLabel').innerText = "Có hút";
+            } else {
+                document.getElementById('smokerToggle').className = "rounded-[2rem] rounded-tl-[3.5rem] rounded-br-[3.5rem] p-5 flex flex-col items-center justify-center border border-white shadow-[0_8px_32px_rgba(0,0,0,0.06)] active:scale-95 transition-all duration-300 group backdrop-blur-xl bg-white/80";
+                document.getElementById('smokerLabel').innerText = "Không";
+            }
+            document.getElementById('depVal').innerText = state.formData.children;
+           
+            const greetingSpan = document.getElementById('personalizedGreeting');
+            if (state.isLoggedIn && state.userName !== 'Khách') greetingSpan.innerHTML = `cho <span class="capitalize">${state.userName}</span>`;
+            else greetingSpan.innerText = 'chi phí y tế';
+            lucide.createIcons();
+           
+            debouncedFetch();
+        }
+
+
+        function makeEditable(elementId, sliderId, minVal, maxVal, setterCallback) {
+            const element = document.getElementById(elementId);
+            const slider = document.getElementById(sliderId);
+            element.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const currentValue = parseInt(element.innerText);
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.value = currentValue;
+                input.min = minVal;
+                input.max = maxVal;
+                input.step = "1";
+                input.className = 'text-2xl font-black text-black bg-white border border-gray-300 rounded-lg px-2 py-1 w-24 text-center';
+                element.style.display = 'none';
+                element.parentNode.insertBefore(input, element);
+                input.focus();
+                const commit = () => {
+                    let newVal = parseInt(input.value);
+                    if (isNaN(newVal)) newVal = currentValue;
+                    newVal = Math.min(maxVal, Math.max(minVal, newVal));
+                    setterCallback(newVal);
+                    slider.value = newVal;
+                    element.innerText = newVal;
+                    element.style.display = 'inline-block';
+                    input.remove();
+                    syncUI();
+                };
+                input.addEventListener('blur', commit);
+                input.addEventListener('keypress', (e) => { if (e.key === 'Enter') commit(); });
+            });
+        }
+
+
+        function populateStateDatalist() {
+            const datalist = document.getElementById('stateList');
+            datalist.innerHTML = '';
+            usStates.forEach(s => {
+                const option = document.createElement('option');
+                option.value = `${s.name} (${s.code})`;
+                datalist.appendChild(option);
+            });
+        }
+        function handleStateInput() {
+            const input = document.getElementById('stateInput');
+            let rawValue = input.value.trim();
+            if (!rawValue) return;
+            let stateCode = null;
+            const matchParen = rawValue.match(/\(([A-Z]{2})\)$/);
+            if (matchParen) {
+                stateCode = matchParen[1];
+            } else {
+                const upperRaw = rawValue.toUpperCase();
+                if (usStates.some(s => s.code === upperRaw)) stateCode = upperRaw;
+                else {
+                    const found = usStates.find(s => s.name.toLowerCase() === rawValue.toLowerCase());
+                    if (found) stateCode = found.code;
+                }
+            }
+            if (stateCode && stateToRegion[stateCode]) {
+                state.formData.region = stateToRegion[stateCode];
+                syncUI();
+            } else {
+                console.log('Không tìm thấy bang:', rawValue);
+            }
+        }
+
+
+        function openSheet(modalEl, containerEl) {
+            modalEl.classList.remove('hidden');
+            setTimeout(() => { containerEl.classList.remove('translate-y-full'); }, 10);
+        }
+        function closeSheet(modalEl, containerEl) {
+            containerEl.classList.add('translate-y-full');
+            setTimeout(() => { modalEl.classList.add('hidden'); }, 300);
+        }
+
+
+        // AI Advisor context
+        function getAIContext() {
+            const bmi = calculateBMI();
+            const bmiCategory = state.bmiCategory || getBMICategory(bmi);
+            const cost = state.predictedCost || 0;
+            const riskLevel = cost > 8000 ? 'Cao' : (cost > 5000 ? 'Trung bình' : 'Thấp');
+            const regionName = getRegionDisplayName(state.formData.region);
+            return `Bạn là 3i AI Advisor, trợ lý học tập và sức khỏe thông minh.
+Thông tin khách hàng:
+- Tên: ${state.userName || 'Khách'}
+- Tuổi: ${state.formData.age}
+- Giới tính: ${state.formData.gender === 'male' ? 'Nam' : 'Nữ'}
+- BMI: ${bmi} (${bmiCategory})
+- Hút thuốc: ${state.formData.smoker === 'yes' ? 'Có' : 'Không'}
+- Số lượng con cái: ${state.formData.children}
+- Khu vực: ${regionName}
+- Chi phí bảo hiểm dự kiến: $${cost.toLocaleString()}/năm
+- Mức độ rủi ro: ${riskLevel}
+Hãy trả lời câu hỏi của khách hàng một cách nhiệt tình, chi tiết, bằng tiếng Việt. Không dùng dấu hoa thị (*).`;
+        }
+        async function callGroqAPI(userMessage) {
+            const context = getAIContext();
+            try {
+                const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+                    model: GROQ_MODEL,
+                    messages: [{ role: "system", content: context }, { role: "user", content: userMessage }],
+                    temperature: 0.7, max_tokens: 500
+                }, { headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' } });
+                return response.data.choices[0].message.content.replace(/\*/g, '');
+            } catch (error) {
+                console.error(error);
+                return `Xin lỗi, tôi đang gặp chút vấn đề. Dựa trên thông tin của bạn: BMI ${calculateBMI()} (${state.bmiCategory || getBMICategory(calculateBMI())}), chi phí $${state.predictedCost.toLocaleString()}/năm. Hãy thử lại sau.`;
+            }
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            populateStateDatalist();
+           
+            const loginScreen = document.getElementById('loginScreen');
+            const calculatorScreen = document.getElementById('calculatorScreen');
+            const userNameInput = document.getElementById('userNameInput');
+            const startBtn = document.getElementById('startBtn');
+            const anonymousBtn = document.getElementById('anonymousBtn');
+            const backBtn = document.getElementById('backBtn');
+            const ageSlider = document.getElementById('ageSlider');
+            const heightSlider = document.getElementById('heightSlider');
+            const weightSlider = document.getElementById('weightSlider');
+            const genderToggle = document.getElementById('genderToggle');
+            const smokerToggle = document.getElementById('smokerToggle');
+            const depMinus = document.getElementById('depMinus');
+            const depPlus = document.getElementById('depPlus');
+            const predictBtn = document.getElementById('predictBtn');
+            const predictBtnText = document.getElementById('predictBtnText');
+            const aiAdvisorBtn = document.getElementById('aiAdvisorBtn');
+            const navHome = document.getElementById('navHome');
+            const navReset = document.getElementById('navReset');
+            const navAIAssistant = document.getElementById('navAIAssistant');
+            const navProfile = document.getElementById('navProfile');
+            const receiptModal = document.getElementById('receiptModal');
+            const receiptCard = document.getElementById('receiptCard');
+            const closeReceiptBtn = document.getElementById('closeReceiptBtn');
+            const aiAdvisorSheet = document.getElementById('aiAdvisorSheet');
+            const aiAdvisorContainer = document.getElementById('aiAdvisorContainer');
+            const aiChatMessages = document.getElementById('aiChatMessages');
+            const aiChatInput = document.getElementById('aiChatInput');
+            const aiChatSendBtn = document.getElementById('aiChatSendBtn');
+            const profileSheet = document.getElementById('profileSheet');
+            const profileContainer = document.getElementById('profileContainer');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const stateInput = document.getElementById('stateInput');
+
+
+            function routeTo(screenName) {
+                state.currentScreen = screenName;
+                if (screenName === 'login') {
+                    loginScreen.classList.remove('hidden');
+                    calculatorScreen.classList.add('hidden');
+                } else {
+                    loginScreen.classList.add('hidden');
+                    calculatorScreen.classList.remove('hidden');
+                    syncUI();
+                }
+            }
+            function processLogin() {
+                const value = userNameInput.value.trim();
+                state.userName = value !== '' ? value : 'Khách';
+                state.isLoggedIn = true;
+                routeTo('calculator');
+            }
+
+
+            makeEditable('ageVal', 'ageSlider', 18, 80, (v) => { state.formData.age = v; });
+            makeEditable('heightVal', 'heightSlider', 140, 220, (v) => { state.formData.height = v; });
+            makeEditable('weightVal', 'weightSlider', 40, 150, (v) => { state.formData.weight = v; });
+           
+            ageSlider.addEventListener('input', (e) => { state.formData.age = Number(e.target.value); syncUI(); });
+            heightSlider.addEventListener('input', (e) => { state.formData.height = Number(e.target.value); syncUI(); });
+            weightSlider.addEventListener('input', (e) => { state.formData.weight = Number(e.target.value); syncUI(); });
+            genderToggle.addEventListener('click', () => { state.formData.gender = state.formData.gender === 'male' ? 'female' : 'male'; syncUI(); });
+            smokerToggle.addEventListener('click', () => { state.formData.smoker = state.formData.smoker === 'yes' ? 'no' : 'yes'; syncUI(); });
+            depMinus.addEventListener('click', () => { state.formData.children = Math.max(0, state.formData.children - 1); syncUI(); });
+            depPlus.addEventListener('click', () => { state.formData.children = state.formData.children + 1; syncUI(); });
+            stateInput.addEventListener('change', handleStateInput);
+            stateInput.addEventListener('blur', handleStateInput);
+           
+            navReset.addEventListener('click', () => {
+                state.formData = { age: 28, gender: 'male', height: 170, weight: 65, children: 0, smoker: 'no', region: 'southeast' };
+                ageSlider.value = 28; heightSlider.value = 170; weightSlider.value = 65;
+                stateInput.value = '';
+                syncUI();
+            });
+           
+            predictBtn.addEventListener('click', async () => {
+                if (state.isFetching) return;
+                await fetchPrediction();
+                const now = new Date();
+                document.getElementById('receiptUserName').innerText = state.userName.toUpperCase();
+                document.getElementById('receiptConfidence').innerText = state.confidence;
+                document.getElementById('receiptDate').innerText = `NGÀY: ${now.toLocaleDateString('vi-VN')}`;
+                document.getElementById('receiptTime').innerText = `GIỜ: ${now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}`;
+                document.getElementById('receiptAge').innerText = `${state.formData.age} TUỔI`;
+                document.getElementById('receiptGender').innerText = state.formData.gender === 'male' ? 'NAM' : 'NỮ';
+                const bmi = calculateBMI();
+                const bmiCat = state.bmiCategory || getBMICategory(bmi);
+                document.getElementById('receiptBMI').innerText = `${bmi} (${bmiCat.toUpperCase()})`;
+                document.getElementById('receiptSmoker').innerText = state.formData.smoker === 'yes' ? 'CÓ' : 'KHÔNG';
+                document.getElementById('receiptDeps').innerText = `${state.formData.children} NGƯỜI`;
+                document.getElementById('receiptRegion').innerText = getRegionDisplayName(state.formData.region).toUpperCase();
+                document.getElementById('receiptTotal').innerText = `$${Math.round(state.predictedCost).toLocaleString()}`;
+                receiptModal.classList.remove('hidden');
+                setTimeout(() => receiptCard.className = "w-full max-w-[380px] relative shadow-2xl transition-all duration-500 transform translate-y-0 scale-100", 50);
+            });
+           
+            function closeReceipt() {
+                receiptCard.className = "w-full max-w-[380px] relative shadow-2xl transition-all duration-500 transform translate-y-10 scale-95";
+                setTimeout(() => receiptModal.classList.add('hidden'), 300);
+            }
+            closeReceiptBtn.addEventListener('click', closeReceipt);
+            receiptModal.addEventListener('click', (e) => { if (e.target === receiptModal) closeReceipt(); });
+           
+            // AI Chat
+            function addChatMessage(sender, text, isAI = true) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = isAI ? 'bg-purple-100 rounded-2xl p-3 max-w-[85%] self-start' : 'bg-purple-200 rounded-2xl p-3 max-w-[85%] self-end';
+                msgDiv.innerHTML = `<span class="text-sm whitespace-pre-wrap">${text}</span>`;
+                aiChatMessages.appendChild(msgDiv);
+                aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+            }
+            function showTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typingIndicator';
+                typingDiv.className = 'bg-purple-100 rounded-2xl p-3 max-w-[85%] self-start';
+                typingDiv.innerHTML = '<span class="text-sm typing">AI đang suy nghĩ</span>';
+                aiChatMessages.appendChild(typingDiv);
+                aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+            }
+            function removeTypingIndicator() {
+                const indicator = document.getElementById('typingIndicator');
+                if (indicator) indicator.remove();
+            }
+            async function sendToAI(message) {
+                showTypingIndicator();
+                try {
+                    const reply = await callGroqAPI(message);
+                    removeTypingIndicator();
+                    addChatMessage('ai', reply, true);
+                } catch (error) {
+                    removeTypingIndicator();
+                    addChatMessage('ai', 'Xin lỗi, tôi đang gặp chút vấn đề. Vui lòng thử lại sau!', true);
+                }
+            }
+            aiChatSendBtn.addEventListener('click', () => {
+                const message = aiChatInput.value.trim();
+                if (!message) return;
+                addChatMessage('user', message, false);
+                aiChatInput.value = '';
+                sendToAI(message);
+            });
+            aiChatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') aiChatSendBtn.click(); });
+            function openAIAdvisor() { openSheet(aiAdvisorSheet, aiAdvisorContainer); }
+            aiAdvisorBtn.addEventListener('click', openAIAdvisor);
+            navAIAssistant.addEventListener('click', openAIAdvisor);
+            document.querySelector('.close-advisor-sheet')?.addEventListener('click', () => closeSheet(aiAdvisorSheet, aiAdvisorContainer));
+            aiAdvisorSheet.addEventListener('click', (e) => { if (e.target === aiAdvisorSheet) closeSheet(aiAdvisorSheet, aiAdvisorContainer); });
+           
+            navProfile.addEventListener('click', () => {
+                if (!state.isLoggedIn) { routeTo('login'); return; }
+                document.getElementById('profileName').innerText = state.userName;
+                openSheet(profileSheet, profileContainer);
+            });
+            document.querySelector('.close-profile-sheet')?.addEventListener('click', () => closeSheet(profileSheet, profileContainer));
+            profileSheet.addEventListener('click', (e) => { if (e.target === profileSheet) closeSheet(profileSheet, profileContainer); });
+            logoutBtn.addEventListener('click', () => {
+                state.isLoggedIn = false;
+                state.userName = '';
+                closeSheet(profileSheet, profileContainer);
+                routeTo('login');
+                userNameInput.value = '';
+            });
+           
+            startBtn.addEventListener('click', processLogin);
+            userNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') processLogin(); });
+            anonymousBtn.addEventListener('click', () => { state.userName = 'Khách'; state.isLoggedIn = false; routeTo('calculator'); });
+            backBtn.addEventListener('click', () => { routeTo('login'); userNameInput.value = ''; state.isLoggedIn = false; });
+            navHome.addEventListener('click', () => { routeTo('login'); userNameInput.value = ''; });
+           
+            syncUI();
+        });
+    </script>
+</body>
+</html>
+
+
+
