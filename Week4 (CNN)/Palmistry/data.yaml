@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['fate', 'head', 'heart', 'life']
+
+roboflow:
+  workspace: nordfriese
+  project: palmistry-dhpnb-1yckw
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/nordfriese/palmistry-dhpnb-1yckw/dataset/2
