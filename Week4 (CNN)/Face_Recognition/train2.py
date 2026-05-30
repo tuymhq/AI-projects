@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import Adam
 
 data_dir = r"D:\AI projects\Freshman year\Week4\Face_Recognition"
 BATCH_SIZE = 32
-MODEL_NAME = "face_id_model2.keras"  # CHỈ 1 MODEL DUY NHẤT
+MODEL_NAME = "face_id_model2.keras"
 
 print("="*50)
 print("👤 TRAIN NHẬN DIỆN KHUÔN MẶT TỪ ĐẦU")
@@ -53,7 +53,6 @@ print(f"\n📋 Số người cần nhận diện: {num_classes}")
 print(f"📊 Tổng số ảnh train: {train_generator.samples}")
 print(f"📊 Tổng số ảnh validation: {val_generator.samples}")
 
-# Xây dựng model
 model = Sequential([
     # Block 1
     Conv2D(32, (3,3), activation='relu', padding='same', input_shape=(200, 200, 3)),
@@ -98,12 +97,11 @@ model.compile(
 
 model.summary()
 
-# Callbacks - CHỈ LƯU 1 MODEL DUY NHẤT
 callbacks = [
     ModelCheckpoint(
-        MODEL_NAME,  # DÙNG 1 TÊN DUY NHẤT
+        MODEL_NAME, 
         monitor='val_accuracy',
-        save_best_only=True,  # CHỈ LƯU KHI TỐT HƠN
+        save_best_only=True,
         mode='max',
         verbose=1
     ),
