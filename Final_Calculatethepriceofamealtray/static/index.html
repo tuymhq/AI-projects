@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Smart Canteen Billing - Hệ thống Nhận diện Khay cơm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="bg-blur bg-blur-1"></div>
+    <div class="bg-blur bg-blur-2"></div>
+
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="brand">
+                <span class="brand-badge"><i class="fa-solid fa-brain"></i> CNN Food AI</span>
+                <h1 class="brand-title">Smart Canteen</h1>
+                <p class="brand-subtitle">Hệ thống nhận diện & thanh toán tự động khay ăn</p>
+            </div>
+            <div class="header-status" id="headerStatus">
+                <span class="status-indicator idle"></span>
+                <span class="status-text">Đang chờ hình ảnh...</span>
+            </div>
+        </header>
+
+        <main class="app-layout">
+            <section class="workspace-section">
+                <!-- Tab chọn chế độ -->
+                <div class="mode-tabs">
+                    <button class="mode-tab active" data-mode="upload">
+                        <i class="fa-solid fa-cloud-upload-alt"></i> Tải ảnh lên
+                    </button>
+                    <button class="mode-tab" data-mode="camera">
+                        <i class="fa-solid fa-camera"></i> Camera realtime
+                    </button>
+                </div>
+
+                <!-- Upload Card -->
+                <div class="card glass-card mode-upload" id="uploadCard">
+                    <div class="card-body">
+                        <div class="drop-zone" id="dropZone">
+                            <input type="file" id="fileInput" accept="image/*" class="file-input">
+                            <div class="drop-zone-content">
+                                <div class="icon-circle">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                </div>
+                                <h3>Chọn hoặc Kéo thả ảnh</h3>
+                                <p>Hỗ trợ định dạng JPG, JPEG, PNG</p>
+                                <button type="button" class="btn btn-secondary" id="browseBtn">Duyệt File</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Card -->
+                <div class="card glass-card mode-camera" id="cameraCard" style="display: none;">
+                    <div class="card-body">
+                        <div class="camera-container">
+                            <video id="cameraVideo" autoplay playsinline muted></video>
+                            <canvas id="cameraCanvas" style="display: none;"></canvas>
+                            <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+                            <div class="camera-guide-overlay" id="cameraGuideOverlay">
+                                <div class="camera-guide-text">
+                                    <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                                    <p>Đặt khay cơm vào khung màu xanh</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="camera-actions">
+                            <button class="btn btn-secondary" id="startCameraBtn">
+                                <i class="fa-solid fa-video"></i> Mở camera
+                            </button>
+                            <button class="btn btn-primary" id="captureBtn" disabled>
+                                <i class="fa-solid fa-camera"></i> CHỤP & NHẬN DIỆN
+                            </button>
+                            <button class="btn btn-secondary" id="stopCameraBtn" disabled>
+                                <i class="fa-solid fa-stop"></i> Tắt camera
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calibration Card (chung cho cả 2 chế độ) -->
+                <div class="card glass-card calibration-card" id="calibrationCard" style="display: none;">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-sliders"></i> Căn chỉnh khung cắt</h2>
+                        <span class="tooltip" title="Điều chỉnh các ô khoanh vùng màu xanh cho khớp với khay cơm"><i class="fa-regular fa-circle-question"></i></span>
+                    </div>
+                    <div class="card-body">
+                        <div class="sliders-grid">
+                            <div class="slider-group">
+                                <label><span><i class="fa-solid fa-up-down-left-right"></i> Mở rộng ô cắt</span></label>
+                                <input type="range" id="rangeExpand" min="-50" max="50" value="0" step="5">
+                            </div>
+                            <div class="slider-group">
+                                <label><span><i class="fa-solid fa-arrows-left-right"></i> Dịch Trái / Phải</span></label>
+                                <input type="range" id="rangeMoveLR" min="-100" max="100" value="0" step="5">
+                            </div>
+                            <div class="slider-group">
+                                <label><span><i class="fa-solid fa-arrows-up-down"></i> Dịch Lên / Xuống</span></label>
+                                <input type="range" id="rangeMoveUD" min="-100" max="100" value="0" step="5">
+                            </div>
+                        </div>
+                        <div class="scan-actions">
+                            <button class="btn btn-primary btn-scan" id="scanBtn">
+                                <i class="fa-solid fa-microchip"></i> SCAN & NHẬN DIỆN
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Card (hiển thị ảnh đã cắt) -->
+                <div class="card glass-card preview-card" id="previewCard" style="display: none;">
+                    <div class="card-header">
+                        <h2><i class="fa-regular fa-image"></i> Ảnh khay cơm nhận diện</h2>
+                        <button class="btn-icon" id="reuploadBtn" title="Chọn ảnh khác"><i class="fa-solid fa-arrow-rotate-left"></i></button>
+                    </div>
+                    <div class="card-body">
+                        <div class="image-container">
+                            <img id="annotatedImage" src="" alt="Khay cơm đã được phân tích">
+                            <div class="loading-overlay" id="loadingOverlay">
+                                <div class="spinner"></div>
+                                <p>Đang phân tích món ăn...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="receipt-section">
+                <div class="card glass-card dishes-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-utensils"></i> Danh sách món ăn phát hiện</h2>
+                        <span class="badge badge-primary" id="detectedCount">0 món</span>
+                    </div>
+                    <div class="card-body" id="dishesListContainer">
+                        <div class="empty-state">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <p>Tải ảnh hoặc chụp ảnh khay cơm để hiển thị danh sách món ăn</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass-card invoice-card">
+                    <div class="invoice-paper">
+                        <div class="invoice-decor-top"></div>
+                        <div class="invoice-header">
+                            <div class="invoice-logo">Smart Canteen</div>
+                            <div class="invoice-meta">
+                                <p id="invoiceDate">Ngày: --/--/----</p>
+                                <p id="invoiceTime">Giờ: --:--:--</p>
+                            </div>
+                        </div>
+                        <div class="invoice-divider"></div>
+                        <div class="invoice-items" id="invoiceItemsContainer">
+                            <p class="empty-invoice-text">Hóa đơn trống</p>
+                        </div>
+                        <div class="invoice-divider dashed"></div>
+                        <div class="invoice-totals">
+                            <div class="total-row"><span>Tạm tính</span><span id="billSubtotal">0 VNĐ</span></div>
+                            <div class="total-row"><span>Thuế VAT (0%)</span><span>0 VNĐ</span></div>
+                            <div class="total-row grand-total"><span>TỔNG CỘNG</span><span id="billTotal">0 VNĐ</span></div>
+                        </div>
+                        <div class="invoice-barcode">
+                            <div class="barcode-lines"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                            <p>CẢM ƠN QUÝ KHÁCH & HẸN GẶP LẠI!</p>
+                        </div>
+                        <div class="invoice-decor-bottom"></div>
+                    </div>
+                    <div class="receipt-actions">
+                        <button class="btn btn-secondary btn-half" id="resetBtn" disabled><i class="fa-solid fa-trash-can"></i> Làm mới</button>
+                        <button class="btn btn-primary btn-half" id="printBtn" disabled><i class="fa-solid fa-print"></i> In hóa đơn</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
